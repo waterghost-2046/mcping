@@ -108,7 +108,7 @@ Download binary or build from source and run.
 ### Linux/Mac
 
 ```
-gcc mcping.c -o mcping
+gcc main.c -o mcping
 ```
 
 ### Windows
