@@ -48,8 +48,9 @@ mcping tor.forgeban.xyz 25565
     "name": "Paper 1.21.4"
   },
   "players": {
-    "online": 0,
-    "max": 40
+    "online": 1,
+    "max": 40,
+    "sample": [{"name": "Name", "id": "00000000-de71-4081-bd78-70db460e8d59"}]
   },
   "description": {
     "text": "A Minecraft Server"
@@ -58,7 +59,43 @@ mcping tor.forgeban.xyz 25565
   }%
 ```
 
+## POC
+This is a POC application with a backend made up of MCPing that queries Minecraft server information using the Http API.
+The application fetches details like server version, players, IP address, and more.
 
+### API Overview
+
+API endpoint
+
+URL: https://forgeban.xyz/api/slp
+HTTP Method: POST
+
+Request Body
+```
+{
+  "address": "forgeban.xyz",
+  "port": "25565" ## Not require when port is 25565 or address is SRV records
+}
+```
+Response Body
+```
+{
+  "version": {
+    "name": "Paper 1.21.4",
+    "protocol": 769
+  },
+  "favicon": "data:image/png;base64,...",
+  "description": {"text": "A Minecraft Server"},
+  "players": {
+    "online": 1,
+    "max": 40,
+    "sample": [{"name": "Name", "id": "00000000-de71-4081-bd78-70db460e8d59"}]
+  },
+  "ip": "152.70.89.255",
+  "port": "25565",
+  "hostname": "tor.forgeban.xyz"
+}
+```
 
 ## Installation
 
