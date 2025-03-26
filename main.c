@@ -38,7 +38,9 @@ size_t write_varint(unsigned char *buffer, int value) {
 
 int connect_with_timeout(struct addrinfo *addr, suseconds_t timeout_usec) {
     int sockfd;
-    int res;
+    int flags, res;
+    struct timeval timeout;
+    fd_set fdset;
 
     sockfd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
     if (sockfd < 0) {
@@ -46,13 +48,44 @@ int connect_with_timeout(struct addrinfo *addr, suseconds_t timeout_usec) {
         return -1;
     }
 
-    res = connect(sockfd, addr->ai_addr, addr->ai_addrlen);
-    if (res < 0 && errno != EINPROGRESS) {
-        perror("Connection failed");
+    flags = fcntl(sockfd, F_GETFL, 0);
+    if (flags < 0 || fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        perror("Failed to set non-blocking mode");
         close(sockfd);
         return -1;
     }
 
+    res = connect(sockfd, addr->ai_addr, addr->ai_addrlen);
+    if (res == 0) {
+        fcntl(sockfd, F_SETFL, flags);
+        return sockfd;
+    } else if (errno != EINPROGRESS) {
+        perror("Connection failed immediately");
+        close(sockfd);
+        return -1;
+    }
+
+    FD_ZERO(&fdset);
+    FD_SET(sockfd, &fdset);
+    timeout.tv_sec = timeout_usec / 1000000;
+    timeout.tv_usec = timeout_usec % 1000000;
+
+    res = select(sockfd + 1, NULL, &fdset, NULL, &timeout);
+    if (res <= 0) {
+        perror("Connection timeout or error");
+        close(sockfd);
+        return -1;
+    }
+
+    int optval;
+    socklen_t optlen = sizeof(optval);
+    if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &optval, &optlen) < 0 || optval != 0) {
+        perror("Connection error after select()");
+        close(sockfd);
+        return -1;
+    }
+
+    fcntl(sockfd, F_SETFL, flags);
     return sockfd;
 }
 
