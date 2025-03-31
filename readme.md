@@ -116,7 +116,7 @@ gcc main.c -o mcping
 You can use [Visual C++ Build Tools](http://landinghub.visualstudio.com/visual-cpp-build-tools)
 
 ```
-cl mcping.c
+cl main.c
 ```
 
 ## Features to be added in the future
