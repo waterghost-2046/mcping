@@ -30,10 +30,7 @@ jobs:
 
       - name: Configure with CMake
         run: |
-          cmake -B ${{ steps.vars.outputs.build_dir }} -S .
-          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake -B ${{ steps.vars.outputs.build_dir }} -S . -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
       - name: Build with CMake
         run: cmake --build ${{ steps.vars.outputs.build_dir }} --config ${{ matrix.build_type }}
