@@ -130,15 +130,13 @@ int read_varint(int sockfd) {
 
     do {
         ssize_t n = recv(sockfd, &byte, 1, 0);
-        if (n == 0) {
-            fprintf(stderr, "Failed to read varint: EOF\n");
+        if (n <= 0) {
+            fprintf(stderr, "Failed to read varint: EOF or error\n");
             exit(EXIT_FAILURE);
         }
         int value = byte & 0x7F;
         result |= value << (7 * numread);
-
         numread++;
-
         if (numread > 5) {
             fprintf(stderr, "Varint too big\n");
             exit(EXIT_FAILURE);
@@ -148,70 +146,136 @@ int read_varint(int sockfd) {
     return result;
 }
 
+int socks5_connect(const char *proxy_host, unsigned short proxy_port, const char *dest_host, unsigned short dest_port) {
+    struct addrinfo hints, *res;
+    int sockfd;
+    char port_str[6];
+    snprintf(port_str, sizeof(port_str), "%d", proxy_port);
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_socktype = SOCK_STREAM;
+    if (getaddrinfo(proxy_host, port_str, &hints, &res) != 0) {
+        perror("getaddrinfo for SOCKS proxy failed");
+        return -1;
+    }
+
+    sockfd = connect_with_timeout(res, TIMEOUT_USEC);
+    freeaddrinfo(res);
+    if (sockfd < 0) return -1;
+
+    unsigned char req1[] = {0x05, 0x01, 0x00};
+    if (send(sockfd, req1, sizeof(req1), 0) != sizeof(req1)) {
+        perror("SOCKS5 handshake send failed");
+        close(sockfd);
+        return -1;
+    }
+
+    unsigned char resp1[2];
+    if (recv(sockfd, resp1, 2, 0) != 2 || resp1[1] != 0x00) {
+        fprintf(stderr, "SOCKS5 handshake failed\n");
+        close(sockfd);
+        return -1;
+    }
+
+    size_t host_len = strlen(dest_host);
+    unsigned char req2[300];
+    size_t pos = 0;
+    req2[pos++] = 0x05;
+    req2[pos++] = 0x01;
+    req2[pos++] = 0x00;
+    req2[pos++] = 0x03;
+    req2[pos++] = host_len;
+    memcpy(req2 + pos, dest_host, host_len);
+    pos += host_len;
+    req2[pos++] = (dest_port >> 8) & 0xFF;
+    req2[pos++] = dest_port & 0xFF;
+
+    if (send(sockfd, req2, pos, 0) != pos) {
+        perror("SOCKS5 connect request failed");
+        close(sockfd);
+        return -1;
+    }
+
+    unsigned char resp2[10];
+    if (recv(sockfd, resp2, 10, 0) < 5 || resp2[1] != 0x00) {
+        fprintf(stderr, "SOCKS5 connect response failed\n");
+        close(sockfd);
+        return -1;
+    }
+
+    return sockfd;
+}
+
 int main(int argc, char **argv) {
     unsigned short port = 25565;
-    struct addrinfo hints, *result, *rp;
-    int sockfd, res;
-    ssize_t nread;
-    size_t handshake_len;
-    unsigned char handshake[HANDSHAKE_SIZE];
-    char request[] = {0x01, 0x00};
-    char response[STRING_BUF_SIZE];
+    unsigned short socks_port = 0;
+    char *socks_host = NULL;
+    const char *target_host = NULL;
 
-    if (argc < 2 || strlen(argv[1]) > 250) {
-        fprintf(stderr, "Usage: %s <host> [port]\n", argv[0]);
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <host> [port] [--socks ip:port]\n", argv[0]);
         return EXIT_FAILURE;
     }
 
-    if (argc == 3) {
+    target_host = argv[1];
+    if (argc >= 3 && strncmp(argv[2], "--", 2) != 0) {
         port = atoi(argv[2]);
     }
 
-    if (port == 0) {
-        fprintf(stderr, "Invalid port\n");
-        return EXIT_FAILURE;
-    }
-
-    memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-
-    char port_str[6];
-    snprintf(port_str, sizeof(port_str), "%d", port);
-    res = getaddrinfo(argv[1], port_str, &hints, &result);
-    if (res != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(res));
-        return EXIT_FAILURE;
-    }
-
-    for (rp = result; rp != NULL; rp = rp->ai_next) {
-        sockfd = connect_with_timeout(rp, TIMEOUT_USEC);
-        if (sockfd != -1) {
-            break;
+    for (int i = 1; i < argc - 1; ++i) {
+        if (strcmp(argv[i], "--socks") == 0) {
+            char *sep = strchr(argv[i + 1], ':');
+            if (sep) {
+                *sep = '\0';
+                socks_host = argv[i + 1];
+                socks_port = atoi(sep + 1);
+            }
         }
     }
 
-    if (rp == NULL) {
-        fprintf(stderr, "Could not connect\n");
+    int sockfd = -1;
+    if (socks_host) {
+        sockfd = socks5_connect(socks_host, socks_port, target_host, port);
+    } else {
+        struct addrinfo hints, *result, *rp;
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+
+        char port_str[6];
+        snprintf(port_str, sizeof(port_str), "%d", port);
+        if (getaddrinfo(target_host, port_str, &hints, &result) != 0) {
+            perror("getaddrinfo");
+            return EXIT_FAILURE;
+        }
+
+        for (rp = result; rp != NULL; rp = rp->ai_next) {
+            sockfd = connect_with_timeout(rp, TIMEOUT_USEC);
+            if (sockfd != -1) break;
+        }
+
         freeaddrinfo(result);
+    }
+
+    if (sockfd < 0) {
+        fprintf(stderr, "Connection failed\n");
         return EXIT_FAILURE;
     }
 
     if (set_socket_timeout(sockfd, TIMEOUT_USEC) == -1) {
         close(sockfd);
-        freeaddrinfo(result);
         return EXIT_FAILURE;
     }
 
-    freeaddrinfo(result);
-
-    handshake_len = build_handshake(handshake, argv[1], port);
+    unsigned char handshake[HANDSHAKE_SIZE];
+    size_t handshake_len = build_handshake(handshake, target_host, port);
     if (send(sockfd, handshake, handshake_len, 0) != handshake_len) {
         perror("Failed to send handshake");
         close(sockfd);
         return EXIT_FAILURE;
     }
 
+    char request[] = {0x01, 0x00};
     if (send(sockfd, request, sizeof(request), 0) != sizeof(request)) {
         perror("Failed to send request");
         close(sockfd);
@@ -220,19 +284,16 @@ int main(int argc, char **argv) {
 
     read_varint(sockfd);
     char packet_id;
-    if (recv(sockfd, &packet_id, 1, 0) == 0) {
-        fprintf(stderr, "Failed to read packet id\n");
-        close(sockfd);
-        return EXIT_FAILURE;
-    }
-
-    if (packet_id != 0) {
-        fprintf(stderr, "Unexpected packet id\n");
+    if (recv(sockfd, &packet_id, 1, 0) <= 0 || packet_id != 0x00) {
+        fprintf(stderr, "Unexpected packet id or error\n");
         close(sockfd);
         return EXIT_FAILURE;
     }
 
     int json_len = read_varint(sockfd);
+    char response[STRING_BUF_SIZE];
+    ssize_t nread;
+
     while (json_len > 0) {
         nread = recv(sockfd, response, STRING_BUF_SIZE, 0);
         if (nread <= 0) {
@@ -240,11 +301,10 @@ int main(int argc, char **argv) {
             close(sockfd);
             return EXIT_FAILURE;
         }
-        json_len -= nread;
         fwrite(response, 1, nread, stdout);
+        json_len -= nread;
     }
 
     close(sockfd);
-
     return EXIT_SUCCESS;
 }
