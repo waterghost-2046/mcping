@@ -1,47 +1,43 @@
-#  MC Ping
+```markdown
+# 🧭 MCPing - Minecraft Server List Query Tool
 
-Query minecraft server via [SLP (Server Listing Ping)](https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Server_List_Ping) to retrieve information (version, motd, player count, max players, mods(on moded), server icon...)
+`MCPing` is a lightweight CLI tool that queries Minecraft servers using the [Server List Ping (SLP)](https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Server_List_Ping) protocol to retrieve server details such as:
 
-## Usage
+- Server version  
+- MOTD (Message of the Day)  
+- Online player count  
+- Maximum player slots  
+- Mod information (if modded)  
+- Server icon  
+- More...
 
+---
+
+## 📦 Usage
+
+```bash
+mcping <host> <port> [--socks 127.0.0.1:1080]
 ```
-mcping <host> <port>
-```
 
-Prints json data sent by server to stdout.
+- `host`: IP address or hostname (must resolve to A record)
+- `port`: Minecraft server port (default: 25565)
+- `--socks`: (optional) Use a SOCKS5 proxy, e.g. `--socks 127.0.0.1:1080`
 
-Host can be IP address or hostname(A record).
+📝 The tool prints raw JSON output returned by the server to `stdout`.
 
+---
 
-### Example
+## 💡 Example
 
-Support for SRV records has not been added yet, so use dns queries when using them.
-```
-dig _minecraft._tcp.forgeban.xyz SRV
+Query a Minecraft server directly:
 
-; <<>> DiG 9.10.6 <<>> _minecraft._tcp.forgeban.xyz SRV
-;; global options: +cmd
-;; Got answer:
-;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 58413
-;; flags: qr rd ra ad; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
-
-;; OPT PSEUDOSECTION:
-; EDNS: version: 0, flags:; udp: 512
-;; QUESTION SECTION:
-;_minecraft._tcp.forgeban.xyz.	IN	SRV
-
-;; ANSWER SECTION:
-_minecraft._tcp.forgeban.xyz. 60 IN	SRV	0 0 25565 tor.forgeban.xyz.
-
-;; Query time: 100 msec
-;; SERVER: 9.9.9.11#53(9.9.9.11)
-;; WHEN: Mon Mar 24 KST 2025
-;; MSG SIZE  rcvd: 93
-```
-In this case ``` mcping tor.forgeban.xyz 25565 ```
-
-```
+```bash
 mcping tor.forgeban.xyz 25565
+```
+
+Example output:
+
+```json
 {
   "version": {
     "protocol": 769,
@@ -55,30 +51,54 @@ mcping tor.forgeban.xyz 25565
   "description": {
     "text": "A Minecraft Server"
   },
-  "favicon": "data:image/png;base64,iV...
-  }%
-```
-
-## POC
-This is a POC application with a backend made up of MCPing that queries Minecraft server information using the Http API.
-The application fetches details like server version, players, IP address, and more.
-
-### API Overview
-
-API endpoint
-
-URL: https://forgeban.xyz/api/slp
-HTTP Method: POST
-
-Request Body
-```
-{
-  "address": "forgeban.xyz",
-  "port": "25565" ## Not require when port is 25565 or address is SRV records
+  "favicon": "data:image/png;base64,iV..."
 }
 ```
-Response Body
+
+---
+
+## 🧠 SRV Record Support
+
+SRV record resolution is not yet implemented, but you can look up SRV entries manually using `dig`:
+
+```bash
+dig _minecraft._tcp.forgeban.xyz SRV
 ```
+
+Example output:
+```
+_minecraft._tcp.forgeban.xyz. 60 IN SRV 0 0 25565 tor.forgeban.xyz.
+```
+
+Then query directly using the resolved host and port:
+
+```bash
+mcping tor.forgeban.xyz 25565
+```
+
+---
+
+## 🌐 MCPing API (Proof of Concept)
+
+A web API backend is also available that wraps the MCPing query via HTTP.
+
+### Endpoint
+
+- **URL:** `https://forgeban.xyz/api/slp`
+- **Method:** `POST`
+
+### Request body
+
+```json
+{
+  "address": "forgeban.xyz",
+  "port": "25565" // optional if port is 25565 or using SRV
+}
+```
+
+### Response
+
+```json
 {
   "version": {
     "name": "Paper 1.21.4",
@@ -97,34 +117,42 @@ Response Body
 }
 ```
 
-## Installation
+---
 
-Download binary or build from source and run.
+## ⚙️ Installation
 
-### Downloads
+### Download binary
 
-## Build from source
+Download a precompiled binary (coming soon).
 
-### Linux/Mac
+### Build from source
 
-```
+#### Linux / macOS
+
+```bash
 gcc main.c -o mcping
 ```
 
-### Windows
+#### Windows (Visual Studio Build Tools)
 
-You can use [Visual C++ Build Tools](http://landinghub.visualstudio.com/visual-cpp-build-tools)
-
-```
+```cmd
 cl main.c
 ```
 
-## Features to be added in the future
+---
 
-Resolve SRV records and... ㅇㅅㅇ
+## 🚧 TODO / Planned Features
 
-## License
+- Automatic SRV record resolution
+- SOCKS proxy authentication support
+- SOCKS4 proxy support
 
-AGPL License
+---
 
+## 📄 License
+
+**AGPL License**
+
+```
 Copyright (c) 2025 waterghost-2046
+```
