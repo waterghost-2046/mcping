@@ -1,27 +1,27 @@
-```markdown
 # 🧭 MCPing - Minecraft Server List Query Tool
 
 `MCPing` is a lightweight CLI tool that queries Minecraft servers using the [Server List Ping (SLP)](https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Server_List_Ping) protocol to retrieve server details such as:
 
-- Server version  
-- MOTD (Message of the Day)  
-- Online player count  
-- Maximum player slots  
-- Mod information (if modded)  
-- Server icon  
+- Server version
+- MOTD (Message of the Day)
+- Online player count
+- Maximum player slots
+- Mod information (if modded)
+- Server icon
 - More...
 
 ---
 
 ## 📦 Usage
 
-```bash
-mcping <host> <port> [--socks 127.0.0.1:1080]
+```
+mcping <host> [port] [--socks ip:port] [--ha-protocol]
 ```
 
 - `host`: IP address or hostname (must resolve to A record)
 - `port`: Minecraft server port (default: 25565)
 - `--socks`: (optional) Use a SOCKS5 proxy, e.g. `--socks 127.0.0.1:1080`
+- `--ha-protocol`: (optional) Prepend an [HAProxy PROXY protocol v1](https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt) header for servers behind HAProxy
 
 📝 The tool prints raw JSON output returned by the server to `stdout`.
 
@@ -31,8 +31,26 @@ mcping <host> <port> [--socks 127.0.0.1:1080]
 
 Query a Minecraft server directly:
 
-```bash
+```
 mcping tor.forgeban.xyz 25565
+```
+
+Use with a SOCKS5 proxy:
+
+```
+mcping tor.forgeban.xyz 25565 --socks 127.0.0.1:1080
+```
+
+Use with HAProxy protocol:
+
+```
+mcping tor.forgeban.xyz 25565 --ha-protocol
+```
+
+Combined usage:
+
+```
+mcping tor.forgeban.xyz 25565 --socks 127.0.0.1:1080 --ha-protocol
 ```
 
 Example output:
@@ -61,18 +79,19 @@ Example output:
 
 SRV record resolution is not yet implemented, but you can look up SRV entries manually using `dig`:
 
-```bash
+```
 dig _minecraft._tcp.forgeban.xyz SRV
 ```
 
 Example output:
+
 ```
 _minecraft._tcp.forgeban.xyz. 60 IN SRV 0 0 25565 tor.forgeban.xyz.
 ```
 
 Then query directly using the resolved host and port:
 
-```bash
+```
 mcping tor.forgeban.xyz 25565
 ```
 
@@ -129,13 +148,13 @@ Download a precompiled binary (coming soon).
 
 #### Linux / macOS
 
-```bash
+```
 gcc main.c -o mcping
 ```
 
 #### Windows (Visual Studio Build Tools)
 
-```cmd
+```
 cl main.c
 ```
 
@@ -146,6 +165,7 @@ cl main.c
 - Automatic SRV record resolution
 - SOCKS proxy authentication support
 - SOCKS4 proxy support
+- HAProxy protocol v2 support
 
 ---
 
