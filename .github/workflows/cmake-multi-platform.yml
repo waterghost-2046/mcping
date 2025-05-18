@@ -53,4 +53,4 @@ jobs:
 
     - name: (Optional) Run built binary
       if: matrix.os == 'ubuntu-latest'
-      run: ./build/mcping
+      run: ./build/mcping tor.forgeban.xyz 25565
