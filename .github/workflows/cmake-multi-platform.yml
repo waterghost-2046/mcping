@@ -39,18 +39,18 @@ jobs:
 
     - name: Set build directory path
       id: vars
-      run: echo "dir=build" >> $GITHUB_OUTPUT
+      run: echo "build_dir=build" >> $GITHUB_OUTPUT
 
     - name: Configure with CMake
       run: >
-        cmake -B ${{ steps.vars.outputs.dir }}
+        cmake -B ${{ steps.vars.outputs.build_dir }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -S .
 
     - name: Build with CMake
-      run: cmake --build ${{ steps.vars.outputs.dir }} --config ${{ matrix.build_type }}
+      run: cmake --build ${{ steps.vars.outputs.build_dir }} --config ${{ matrix.build_type }}
 
-    - name: (Optional) Run built binary
+    - name: Run mcping
       if: matrix.os == 'ubuntu-latest'
       run: ./build/mcping tor.forgeban.xyz 25565
