@@ -7,11 +7,13 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
 #define HANDSHAKE_SIZE 4096
 #define STRING_BUF_SIZE 4096
@@ -206,14 +208,34 @@ int socks5_connect(const char *proxy_host, unsigned short proxy_port, const char
     return sockfd;
 }
 
+int send_proxy_header(int sockfd, unsigned short server_port) {
+    const char *client_ip = "127.0.0.1";
+    const char *server_ip = "127.0.0.1";
+    srand(time(NULL));
+    unsigned short client_port = rand() % 65534+1;
+
+    char header[108];
+    int len = snprintf(header, sizeof(header),
+        "PROXY TCP4 %s %s %u %u\r\n",
+        client_ip, server_ip, client_port, server_port);
+
+    if (send(sockfd, header, len, 0) != len) {
+        perror("Failed to send PROXY header");
+        return -1;
+    }
+
+    return 0;
+}
+
 int main(int argc, char **argv) {
     unsigned short port = 25565;
     unsigned short socks_port = 0;
     char *socks_host = NULL;
     const char *target_host = NULL;
+    int use_ha_protocol = 0;
 
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <host> [port] [--socks ip:port]\n", argv[0]);
+        fprintf(stderr, "Usage: %s <host> [port] [--socks ip:port] [--ha-protocol]\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -222,14 +244,16 @@ int main(int argc, char **argv) {
         port = atoi(argv[2]);
     }
 
-    for (int i = 1; i < argc - 1; ++i) {
-        if (strcmp(argv[i], "--socks") == 0) {
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--socks") == 0 && i + 1 < argc) {
             char *sep = strchr(argv[i + 1], ':');
             if (sep) {
                 *sep = '\0';
                 socks_host = argv[i + 1];
                 socks_port = atoi(sep + 1);
             }
+        } else if (strcmp(argv[i], "--ha-protocol") == 0) {
+            use_ha_protocol = 1;
         }
     }
 
@@ -265,6 +289,13 @@ int main(int argc, char **argv) {
     if (set_socket_timeout(sockfd, TIMEOUT_USEC) == -1) {
         close(sockfd);
         return EXIT_FAILURE;
+    }
+
+    if (use_ha_protocol) {
+        if (send_proxy_header(sockfd, port) == -1) {
+            close(sockfd);
+            return EXIT_FAILURE;
+        }
     }
 
     unsigned char handshake[HANDSHAKE_SIZE];
