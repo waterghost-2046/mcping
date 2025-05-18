@@ -8,49 +8,35 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        build_type: [Release]
-        c_compiler: [gcc, clang, cl]
         include:
-          - os: ubuntu-latest
-            c_compiler: gcc
+          - c_compiler: gcc
             cpp_compiler: g++
-          - os: ubuntu-latest
-            c_compiler: clang
+            build_type: Release
+          - c_compiler: clang
             cpp_compiler: clang++
-        exclude:
-          - os: windows-latest
-            c_compiler: gcc
-          - os: windows-latest
-            c_compiler: clang
-          - os: ubuntu-latest
-            c_compiler: cl
-          - os: windows-latest
-            c_compiler: cl
-            cpp_compiler: cl
+            build_type: Release
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set build directory path
-      id: vars
-      run: echo "build_dir=build" >> $GITHUB_OUTPUT
+      - name: Set build directory path
+        id: vars
+        run: echo "build_dir=build" >> $GITHUB_OUTPUT
 
-    - name: Configure with CMake
-      run: >
-        cmake -B ${{ steps.vars.outputs.build_dir }}
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -S .
+      - name: Configure with CMake
+        run: |
+          cmake -B ${{ steps.vars.outputs.build_dir }} -S .
+          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
-    - name: Build with CMake
-      run: cmake --build ${{ steps.vars.outputs.build_dir }} --config ${{ matrix.build_type }}
+      - name: Build with CMake
+        run: cmake --build ${{ steps.vars.outputs.build_dir }} --config ${{ matrix.build_type }}
 
-    - name: Run mcping
-      if: matrix.os == 'ubuntu-latest'
-      run: ./build/mcping tor.forgeban.xyz 25565
+      - name: Run mcping
+        run: ./build/mcping tor.forgeban.xyz 25565
