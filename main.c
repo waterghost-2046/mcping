@@ -122,11 +122,12 @@ int connect_with_timeout(struct addrinfo *addr, int timeout_sec) {
         return -1;
     }
 
+    // 블로킹 모드로 복원
 #ifdef _WIN32
     mode = 0;
-    ioctlsocket(sockfd, FIONBIO, &mode); // 블로킹 모드로 (윈도우)
+    ioctlsocket(sockfd, FIONBIO, &mode);
 #else
-    fcntl(sockfd, F_SETFL, flags); // 블로킹 모드로
+    fcntl(sockfd, F_SETFL, flags);
 #endif
 
     return sockfd;
@@ -345,17 +346,28 @@ int main(int argc, char **argv) {
 
     if (sockfd < 0) {
         fprintf(stderr, "Connection failed\n");
+#ifdef _WIN32
+        WSACleanup();
+#endif
         return EXIT_FAILURE;
     }
 
     if (set_socket_timeout(sockfd, TIMEOUT_SEC) == -1) {
+        fprintf(stderr, "Failed to set socket timeout\n");
         close(sockfd);
+#ifdef _WIN32
+        WSACleanup();
+#endif
         return EXIT_FAILURE;
     }
 
     if (use_ha_protocol) {
         if (send_proxy_header(sockfd, port) == -1) {
+            fprintf(stderr, "Failed to send PROXY protocol header\n");
             close(sockfd);
+#ifdef _WIN32
+            WSACleanup();
+#endif
             return EXIT_FAILURE;
         }
     }
@@ -363,15 +375,21 @@ int main(int argc, char **argv) {
     unsigned char handshake[HANDSHAKE_SIZE];
     size_t handshake_len = build_handshake(handshake, target_host, port);
     if (send(sockfd, (char*)handshake, handshake_len, 0) != (ssize_t)handshake_len) {
-        perror("Failed to send handshake");
+        fprintf(stderr, "Failed to send handshake\n");
         close(sockfd);
+#ifdef _WIN32
+        WSACleanup();
+#endif
         return EXIT_FAILURE;
     }
 
     char request[] = {0x01, 0x00};
     if (send(sockfd, request, sizeof(request), 0) != sizeof(request)) {
-        perror("Failed to send request");
+        fprintf(stderr, "Failed to send status request\n");
         close(sockfd);
+#ifdef _WIN32
+        WSACleanup();
+#endif
         return EXIT_FAILURE;
     }
 
@@ -379,13 +397,28 @@ int main(int argc, char **argv) {
     if (packet_len < 0) {
         fprintf(stderr, "Failed to read packet length\n");
         close(sockfd);
+#ifdef _WIN32
+        WSACleanup();
+#endif
         return EXIT_FAILURE;
     }
 
     char packet_id;
-    if (recv(sockfd, &packet_id, 1, 0) <= 0 || packet_id != 0x00) {
-        fprintf(stderr, "Unexpected packet id or error\n");
+    if (recv(sockfd, &packet_id, 1, 0) <= 0) {
+        fprintf(stderr, "Failed to read packet ID\n");
         close(sockfd);
+#ifdef _WIN32
+        WSACleanup();
+#endif
+        return EXIT_FAILURE;
+    }
+    
+    if (packet_id != 0x00) {
+        fprintf(stderr, "Unexpected packet ID (0x%02X)\n", (unsigned char)packet_id);
+        close(sockfd);
+#ifdef _WIN32
+        WSACleanup();
+#endif
         return EXIT_FAILURE;
     }
 
@@ -393,6 +426,9 @@ int main(int argc, char **argv) {
     if (json_len < 0) {
         fprintf(stderr, "Failed to read JSON length\n");
         close(sockfd);
+#ifdef _WIN32
+        WSACleanup();
+#endif
         return EXIT_FAILURE;
     }
 
@@ -404,8 +440,11 @@ int main(int argc, char **argv) {
         int to_read = (json_len < STRING_BUF_SIZE) ? json_len : STRING_BUF_SIZE;
         nread = recv(sockfd, response, to_read, 0);
         if (nread <= 0) {
-            perror("Failed to read JSON response");
+            fprintf(stderr, "Connection closed while reading JSON response\n");
             close(sockfd);
+#ifdef _WIN32
+            WSACleanup();
+#endif
             return EXIT_FAILURE;
         }
         fwrite(response, 1, nread, stdout);
